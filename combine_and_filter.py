@@ -19,6 +19,8 @@ from plot.QQMan_PLotting import plotting_man_qqplot
 #combining, filtering  and processing sumstats
 def combine_and_filter(file_chr_22
 			, output_file
+			, regenie=False
+			, saige_binary=False
 			, min_af=0.01
 			, min_info=0.3
 			, num_chrom=22
@@ -48,20 +50,20 @@ def combine_and_filter(file_chr_22
 		#make columns the same accross softwares
 		if regenie:
 			print("summstats format set using --regenie")  
-			df.columns("CHR", "BP", "SNP", "A1", "A2", "A2FREQ", "INFO", "N", "TEST", "BETA", "SE", "CHISQ", "LOG10P", "EXTRA")
+			df.columns = ["CHR", "BP", "SNP", "A1", "A2", "A2FREQ", "INFO", "N", "TEST", "BETA", "SE", "CHISQ", "LOG10P", "EXTRA"]
 			# convert log10 pval to pvalue
 			df['P'] = 10 ** (-df['LOG10P'])
-			df.loc("CHR", "BP", "SNP", "A1", "A2", "A2FREQ", "INFO", "N", "BETA", "SE", "P")
+			df = df.loc[:, ["CHR", "BP", "SNP", "A1", "A2", "A2FREQ", "INFO", "N", "BETA", "SE", "P"]]
 			print("new columns",df.columns)
-		if saige-binary
+		
+		if saige_binary:
 			print("summstats format set using --saige-binary") 
-			CHR     POS     MarkerID        Allele1 Allele2 AC_Allele2      AF_Allele2      MissingRate     BETA    SE      Tstatvar     p.value p.value.NA      Is.SPA  AF_case AF_ctrl N_case  N_ctrl  N_case_hom      N_case_het      N_ctrl_hom  N_ctrl_het
-			df.columns("CHR", "BP", "SNP", "A1", "A2", "AC_Allele2", "A2FREQ", "MissingRate","BETA", "SE", "Tstatvar", "P", "p.value.NA", "Is.SPA", "AF_case", "AF_ctrl", "N_case", "N_ctrl", "N_case_hom", "N_case_het", "N_ctrl_hom", "N_ctrl_het" )
+			df.columns = ["CHR", "BP", "SNP", "A1", "A2", "AC_Allele2", "A2FREQ", "MissingRate","BETA", "SE", "Tstatvar", "P", "p.value.NA", "Is.SPA", "AF_case", "AF_ctrl", "N_case", "N_ctrl", "N_case_hom", "N_case_het", "N_ctrl_hom", "N_ctrl_het"]
 			#get analagous to INFO score
 			df['INFO'] = 1-df['MissingRate']
 			#get N column
 			df['N'] = df['N_case'] + df['N_ctrl']
-			df.loc("CHR", "BP", "SNP", "A1", "A2", "A2FREQ", "INFO", "N", "BETA", "SE", "P")
+			df = df.loc[:, ["CHR", "BP", "SNP", "A1", "A2", "A2FREQ", "INFO", "N", "BETA", "SE", "P"]]
 		# Filter rows based on AF and INFO
 		print("Line count before filtering",df.shape[0])
 		df = df[(df['A2FREQ'] >= min_af) & (df['A2FREQ'] <= 1-min_af) & (df['INFO'] >= min_info)]
@@ -77,17 +79,20 @@ def combine_and_filter(file_chr_22
 	
 	if munge:
 		#format for LDSC
+		#make LDSC folder
 		LDSC_output_dir=f"{input_folder}/LDSC"
 		os.mkdir(LDSC_output_dir)
-		LDSC = combined_df.loc[:, ["ID","A1","A2","BETA","P","N"]]
-		#swith A1 and A2, as A1 is effect allele
+		#subset LDSC columsn
+		LDSC = combined_df.loc[:, ["SNP","A1","A2","BETA","P","N"]]
+		#swith A1 and A2, as A1 needs to be the effect allele
 		LDSC.columns = ["SNP","A2","A1","BETA","P","N"]
-		LDSC = combined_df.loc[:, ["ID","A1","A2","BETA","P","N"]]
+		LDSC = combined_df.loc[:, ["SNP","A1","A2","BETA","P","N"]]
+		#save
 		LDSC_output = f"{LDSC_output_dir}/{output_file}.LDSC"		
 		LDSC.to_csv(f"{LDSC_output}",index=False, sep = " ", na_rep = "NA")
 		print(f"LDSC files saved here: {LDSC_output}")
-		LDSC_path, LDSC_file = os.path.split(LDSC_output)
-		munge_results(LDSC_file, LDSC_path )
+		#LDSC_path, LDSC_file = os.path.split(LDSC_output)
+		munge_results(f"{output_file}.LDSC", LDSC_output_dir)
 		
 	if ManQQplot:
 		plot_output_dir=f"{input_folder}/plot"
@@ -95,12 +100,12 @@ def combine_and_filter(file_chr_22
 		plotting_man_qqplot(output_file,plot_output_dir,ManQQplot_title)
 
 	if clump:
-		CLUMP = combined_df.loc[:, ["ID","p_value"]]
-		CLUMP.columns = ["SNP","P"]
+		CLUMP = combined_df.loc[:, ["SNP","P"]]
 		print("--clump set to true")
 		print(f"clumping with the following thresholds: R2={clumpr2}, P value={clumpP}, Kilabases={clumpKB}")
-		CLUMP.to_csv(f"{input_folder}/TEMP.clump",index=False, sep = " ", na_rep = "NA")
-		clumping_results(input_file = "TEMP.clump"
+		temp_clump = f"{output_file}.CLUMP.TMP"
+		CLUMP.to_csv(f"{input_folder}/{temp_clump}",index=False, sep = " ", na_rep = "NA")
+		clumping_results(input_file = temp_clump
 				,input_dir = input_folder
 				,pval = "P"
 				,out_file = output_file
@@ -116,6 +121,8 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="This Script combines and filters GWAS summary statistics across chromsomes, allows you to munge the summary statistics (--munge), allows you to plot a Mannhattan plot and qqplot using the --ManQQplot and --ManQQplot_title, and clump (--clump, --clumpr2, --clumpP, --clumpKB")
 	parser.add_argument("--file_chr_22", required=True, help="the full path and  file name of the results of chromsome 22 - used to work out naming convention of input and output files")
 	parser.add_argument("--output_file", required=True, help="name for output file")
+	parser.add_argument("--regenie", required=False, action="store_true", default=False, help="was regenie used to generate these results")
+	parser.add_argument("--saige_binary", required=False, action="store_true", default=False, help="was saige used to generate these results")
 	parser.add_argument("--min_af", required=False, type=float, default=0.01, help="minimum allele frequency, default = 0.01")
 	parser.add_argument("--min_info", required=False, type=float, default=0.3, help="minimum info score, default = 0.3")
 	parser.add_argument("--num_chrom", required=False, type=int, default=22, help="number of chromosomes, default = 22" )
@@ -132,6 +139,8 @@ if __name__ == "__main__":
 	# Call the function to combine and filter the data
 	combine_and_filter(args.file_chr_22
 			, args.output_file
+			, args.regenie
+			, args.saige_binary
 			, args.min_af
 			, args.min_info
 			, args.num_chrom
