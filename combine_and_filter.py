@@ -11,6 +11,7 @@ import subprocess
 from munge.munging import munge_results
 from clump.clumping import clumping_results
 from plot.QQMan_PLotting import plotting_man_qqplot
+import pathlib
 
 ##########################
 #define arguments
@@ -39,7 +40,7 @@ def combine_and_filter(file_chr_22
 	input_folder,file_chr_22_name = os.path.split(file_chr_22)
 	prefix,suffix = file_chr_22_name.split("22")
 	# Loop through the specified number of chromosomes
-	for chrom in range(20, num_chrom + 1):
+	for chrom in range(1, num_chrom + 1):
 		print("for chromosome",chrom)
 		# Construct the filename using pre and suffix
 		filename = os.path.join(input_folder, f"{prefix}{chrom}{suffix}")
@@ -73,6 +74,7 @@ def combine_and_filter(file_chr_22
 		print("Line count of combined:", combined_df.shape[0])
 		print(combined_df.head)
 	#save
+	output_file = f"{output_file}_INFO_{min_info}_MAF_{min_af}.txt"
 	output_name= os.path.join(input_folder, output_file)
 	combined_df.to_csv(output_name, index=False, sep = " ", na_rep ="NA")
 	print(f"File saved to: {output_name}")
@@ -80,8 +82,9 @@ def combine_and_filter(file_chr_22
 	if munge:
 		#format for LDSC
 		#make LDSC folder
-		LDSC_output_dir=f"{input_folder}/LDSC"
-		os.mkdir(LDSC_output_dir)
+		LDSC_output_dir = f"{input_folder}/LDSC"
+		pathlib.Path(LDSC_output_dir).mkdir(parents=True, exist_ok=True)
+		#os.mkdir(LDSC_output_dir, exist_ok=True)
 		#subset LDSC columsn
 		LDSC = combined_df.loc[:, ["SNP","A1","A2","BETA","P","N"]]
 		#swith A1 and A2, as A1 needs to be the effect allele
@@ -95,9 +98,7 @@ def combine_and_filter(file_chr_22
 		munge_results(f"{output_file}.LDSC", LDSC_output_dir)
 		
 	if ManQQplot:
-		plot_output_dir=f"{input_folder}/plot"
-		os.mkdir(plot_output_dir)
-		plotting_man_qqplot(output_file,plot_output_dir,ManQQplot_title)
+		plotting_man_qqplot(output_file,input_folder,ManQQplot_title)
 
 	if clump:
 		CLUMP = combined_df.loc[:, ["SNP","P"]]
